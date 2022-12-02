@@ -14,9 +14,10 @@ import (
 
 func main() {
 	var (
-		multicast          = flag.Bool("multicast", true, "Enable mulitcast listener")
+		multicast          = flag.Bool("multicast", false, "Enable mulitcast listener")
 		multicastInterface = flag.String("mcast-if", "", "Bind interface for multicast listener")
 	)
+	flag.Parse()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -32,21 +33,32 @@ func main() {
 	}
 
 	var intf *net.Interface = nil
+	var intfName = "<not specified>"
 	if multicastInterface != nil && *multicastInterface != "" {
 		intf, err = net.InterfaceByName(*multicastInterface)
 		if err != nil {
-			log.Errorf("No interface %s found", *multicastInterface)
-			intf = nil
+			log.WithError(err).Errorf("interface %s not found", *multicastInterface)
+			os.Exit(1)
 		}
+		intfName = intf.Name
+	}
+
+	if intf != nil && intf.Flags&net.FlagMulticast == 0 {
+		log.Errorf("multicast not enabled on interface %s", intfName)
+		os.Exit(1)
 	}
 
 	var conn *net.UDPConn
 	if addr.IP.IsMulticast() {
-		log.Infof("Starting multicast listener for destination %s on interface %v", addr, intf)
+		log.Infof("Requesting multicast listener for group %s on interface %v", addr, intfName)
 		conn, err = net.ListenMulticastUDP("udp4", intf, addr)
 	} else {
-		log.Infof("Starting listener for destination %s", addr)
+		log.Infof("Requesting listener for destination %s", addr)
 		conn, err = net.ListenUDP("udp4", addr)
+	}
+	if err != nil {
+		log.WithError(err).Error("failed to create udp listener")
+		os.Exit(1)
 	}
 	defer func(conn *net.UDPConn) {
 		_ = conn.Close()

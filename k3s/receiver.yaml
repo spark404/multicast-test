@@ -92,7 +92,6 @@ metadata:
   namespace: apps
   labels:
     app: receiver
-    need_ampq: "true"
 spec:
   replicas: 1
   selector:
@@ -106,5 +105,9 @@ spec:
       containers:
         - name: receiver
           image: registry.vagrant-cluster.laptop/receiver:latest
+          imagePullPolicy: Always
+#          args:
+#            - '--multicast'
+#            - '--mcast-if=eth0'
           ports:
             - containerPort: 5001
