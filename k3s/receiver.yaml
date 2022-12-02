@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: receiver-crt
+  namespace: apps
+spec:
+  secretName: receiver-crt
+  dnsNames:
+    - "receiver.vagrant-cluster.laptop"
+  issuerRef:
+    name: ca-cluster-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  commonName: receiver.vagrant-cluster.laptop
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: receiver-ingress
+  namespace: apps
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  tls:
+    - hosts:
+        - receiver.vagrant-cluster.laptop
+      secretName: receiver-crt
+  rules:
+    - host: receiver.vagrant-cluster.laptop
+      http:
+        paths:
+          - path: /testpath
+            pathType: Prefix
+            backend:
+              service:
+                name: receiver-service
+                port:
+                  number: 5001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: receiver-service
+  namespace: apps
+spec:
+  selector:
+    app: receiver
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: receiver-udp-service
+  namespace: apps
+spec:
+  selector:
+    app: receiver
+  ports:
+    - protocol: UDP
+      port: 4242
+      targetPort: 4242
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: receiver-mcast-service
+  namespace: apps
+spec:
+  selector:
+    app: receiver
+  ports:
+    - protocol: UDP
+      port: 4242
+      targetPort: 4242
+  type: LoadBalancer
+  loadBalancerClass: multicastlb/multicast
+  loadBalancerIp: 239.42.42.42
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: receiver-deployment
+  namespace: apps
+  labels:
+    app: receiver
+    need_ampq: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: receiver
+  template:
+    metadata:
+      labels:
+        app: receiver
+    spec:
+      containers:
+        - name: receiver
+          image: registry.vagrant-cluster.laptop/receiver:latest
+          ports:
+            - containerPort: 5001
